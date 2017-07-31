@@ -1,7 +1,7 @@
-# LAB - 1
+# Lab - 1
 
 ### Lab questions:
-![lab-1](./../lab-sheets/1.jpg)
+![lab-1](./../images/lab-sheets/1.jpg)
 
 ## Task-1
  - `-c` : Compile or assemble the source files, but do not link.  The linking stage simply is not done.  The ultimate output is in the form of an object file for each source file.
