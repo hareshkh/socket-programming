@@ -22,6 +22,8 @@ def chat_client():
     except :
         print 'Unable to connect'
         sys.exit()
+
+    s.send('$' + group)
      
     print 'Connected to remote host. You can start sending messages to group : ', group
     sys.stdout.write('[Me] '); sys.stdout.flush()

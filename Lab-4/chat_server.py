@@ -6,8 +6,10 @@ import select
 
 HOST = '' 
 SOCKET_LIST = []
+GRP = [0]*30
 RECV_BUFFER = 4096 
 PORT = 9009
+GRPMAX = 3
 
 def chat_server():
 
@@ -44,7 +46,19 @@ def chat_server():
                     data = sock.recv(RECV_BUFFER)
                     if data:
                         # there is something in the socket
-                        broadcast(server_socket, sock, "\r" + '[' + str(sock.getpeername()) + '] ' + data)  
+                        if(data[0] == '$'):
+                            grpno = data[1:]
+                            grpno = int(grpno)
+                            if(GRP[grpno] == None):
+                                GRP[grpno] = 1
+                            elif(GRP[grpno] == GRPMAX):
+                                if sock in SOCKET_LIST:
+                                    SOCKET_LIST.remove(sock)
+                                sock.close()
+                            else:
+                                GRP[grpno] += 1
+                        else:
+                            broadcast(server_socket, sock, "\r" + '[' + str(sock.getpeername()) + '] ' + data)  
                     else:
                         # remove the socket that's broken    
                         if sock in SOCKET_LIST:
@@ -54,7 +68,7 @@ def chat_server():
                         broadcast(server_socket, sock, "Client (%s, %s) is offline\n" % addr) 
 
                 # exception 
-                except:
+                except Exception, e:
                     broadcast(server_socket, sock, "Client (%s, %s) is offline\n" % addr)
                     continue
 
