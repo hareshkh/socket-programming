@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <signal.h>
 #include <strings.h>
+#include <string.h>
 #include <sys/time.h>
 #include <errno.h>
 using namespace std;
@@ -68,7 +69,16 @@ void sendicmp() {
 	icmp_packet -> icmp_code = 0;
 	icmp_packet -> icmp_id = pid;
 	icmp_packet -> icmp_seq = ++nsent;
-	gettimeofday((struct timeval *) icmp_packet -> icmp_data, NULL);
+
+	struct timeval *tv;
+	gettimeofday(tv, NULL);
+	printf("Start send2\n");
+	u_char *message = (u_char *) malloc(sizeof(struct timeval) + 5 + 1);
+	char *text = "Hello";
+	memcpy(message, text, 5);
+	memcpy(message + 5, (void *) tv, sizeof(struct timeval));
+	memcpy(icmp_packet -> icmp_data, message, sizeof(message));
+
 	icmp_packet -> icmp_cksum = 0;
 	icmp_packet -> icmp_cksum  = in_cksum((u_short *)icmp_packet, len);
 
@@ -103,11 +113,19 @@ void process(char *recvbuf, int size, timeval *trecv, char *host) {
 			return;
 		}
 
-		struct timeval *tsend = (struct timeval *) icmp_packet -> icmp_data;
+		u_char *data = icmp_packet->icmp_data;
+		
+		// Text extraction
+		char text[5];
+		memcpy(text, &data, 5);
+
+		// Time extraction
+		struct timeval *tsend = (struct timeval *) (data + 5);
 		tv_sub(trecv, tsend);
 
 		float rtt = trecv -> tv_sec * 1000 + trecv -> tv_usec / 1000;
-		printf("%d bytes from %s : seq=%u, ttl=%d, rtt=%.3fms\n", icmplen, host, icmp_packet->icmp_seq, ip_packet->ip_ttl, rtt);
+		printf("%d bytes from %s : seq=%u, ttl=%d, rtt=%.3fms, message=%s\n",
+			icmplen, host, icmp_packet->icmp_seq, ip_packet->ip_ttl, rtt, text);
 	}
 
 }
