@@ -62,7 +62,7 @@ void tv_sub(struct timeval *recv, struct timeval *send) {
 }
 
 void sendicmp() {
-	u_char sendbuf[32];
+	char sendbuf[32];
 	int len = 32;
 	struct icmp *icmp_packet = (struct icmp *) sendbuf;
 	icmp_packet -> icmp_type = ICMP_ECHO;
@@ -70,14 +70,11 @@ void sendicmp() {
 	icmp_packet -> icmp_id = pid;
 	icmp_packet -> icmp_seq = ++nsent;
 
-	struct timeval *tv;
-	gettimeofday(tv, NULL);
-	printf("Start send2\n");
-	u_char *message = (u_char *) malloc(sizeof(struct timeval) + 5 + 1);
 	char *text = "Hello";
-	memcpy(message, text, 5);
-	memcpy(message + 5, (void *) tv, sizeof(struct timeval));
-	memcpy(icmp_packet -> icmp_data, message, sizeof(message));
+
+	gettimeofday((struct timeval *) icmp_packet -> icmp_data, NULL);
+
+	strcpy(((char *)icmp_packet->icmp_data) + sizeof(struct timeval), text);
 
 	icmp_packet -> icmp_cksum = 0;
 	icmp_packet -> icmp_cksum  = in_cksum((u_short *)icmp_packet, len);
@@ -113,21 +110,21 @@ void process(char *recvbuf, int size, timeval *trecv, char *host) {
 			return;
 		}
 
-		u_char *data = icmp_packet->icmp_data;
-		
-		// Text extraction
-		char text[5];
-		memcpy(text, &data, 5);
+		char *data = (char *)icmp_packet->icmp_data;
+		char tssent[sizeof(struct timeval)];
+		for(int i=0; i<sizeof(struct timeval); i++){
+			tssent[i] = *(data+i);
+		}
 
-		// Time extraction
-		struct timeval *tsend = (struct timeval *) (data + 5);
-		tv_sub(trecv, tsend);
+		struct timeval *tsent = (struct timeval *)tssent;
+		tv_sub(trecv, tsent);
 
-		float rtt = trecv -> tv_sec * 1000 + trecv -> tv_usec / 1000;
+		char *text = (char *)(icmp_packet->icmp_data) + sizeof(struct timeval);
+
+		double rtt = trecv -> tv_sec * 1000 + trecv -> tv_usec / 1000;
 		printf("%d bytes from %s : seq=%u, ttl=%d, rtt=%.3fms, message=%s\n",
 			icmplen, host, icmp_packet->icmp_seq, ip_packet->ip_ttl, rtt, text);
 	}
-
 }
 
 void readloop(char *host) {
@@ -172,7 +169,12 @@ int main(int argc, char **argv) {
 	printf("Ping host : %s\n", host);
 	bzero(&sasend, sizeof(sasend));
 	sasend.sin_family = AF_INET;
-	inet_aton(host, &sasend.sin_addr);
+	sasend.sin_addr.s_addr = inet_addr(argv[1]);
+
+	if(geteuid() != 0) {
+		printf("Run with sudo to create RAW socket\n");
+		return -1;
+	}
 
 	sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	setuid(getuid());

@@ -106,7 +106,7 @@ void process(char *recvbuf, int size, timeval *trecv, char *host) {
 		struct timeval *tsend = (struct timeval *) icmp_packet -> icmp_data;
 		tv_sub(trecv, tsend);
 
-		float rtt = trecv -> tv_sec * 1000 + trecv -> tv_usec / 1000;
+		double rtt = trecv -> tv_sec * 1000 + trecv -> tv_usec / 1000;
 		printf("%d bytes from %s : seq=%u, ttl=%d, rtt=%.3fms\n", icmplen, host, icmp_packet->icmp_seq, ip_packet->ip_ttl, rtt);
 	}
 
@@ -154,7 +154,12 @@ int main(int argc, char **argv) {
 	printf("Ping host : %s\n", host);
 	bzero(&sasend, sizeof(sasend));
 	sasend.sin_family = AF_INET;
-	inet_aton(host, &sasend.sin_addr);
+	sasend.sin_addr.s_addr = inet_addr(argv[1]);
+
+	if(geteuid() != 0) {
+		printf("Run with sudo to create RAW socket\n");
+		return -1;
+	}
 
 	sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	setuid(getuid());
