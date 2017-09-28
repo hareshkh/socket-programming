@@ -1,5 +1,6 @@
 /*input
 45000073000040004011b861c0a80001c0a800c7
+Big vs Little endian https://tools.ietf.org/html/rfc1071
 */
 #include <iostream>
 #include <string>
