@@ -7,6 +7,8 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#include <netinet/in_systm.h>
+#include <netdb.h>
 #include <signal.h>
 #include <strings.h>
 #include <sys/time.h>
@@ -18,17 +20,38 @@ int nsent;
 int sockfd;
 struct sockaddr_in sasend;
 
-int checksum_calc(char *buf, int count) {
-	int sum = 0;
-	for (int i = 0; i < count - 1; i++) {
-		sum += (buf[i] << 8) + buf[i+1];
-		sum = ((sum%(1<<16)) + sum/16);
+short in_cksum(u_short *addr, int len) {
+	register int nleft = len;
+	register u_short *w = addr;
+	register u_short answer;
+	register int sum = 0;
+
+	/*
+	 *  Our algorithm is simple, using a 32 bit accumulator (sum),
+	 *  we add sequential 16 bit words to it, and at the end, fold
+	 *  back all the carry bits from the top 16 bits into the lower
+	 *  16 bits.
+	 */
+	while( nleft > 1 )  {
+		sum += *w++;
+		nleft -= 2;
 	}
-	if(count % 2) {
-		sum += buf[count - 1];
-		sum = ((sum%(1<<16)) + sum/16);
+
+	/* mop up an odd byte, if necessary */
+	if( nleft == 1 ) {
+		u_short	u = 0;
+
+		*(u_char *)(&u) = *(u_char *)w ;
+		sum += u;
 	}
-	return ~sum;
+
+	/*
+	 * add back carry outs from top 16 bits to low 16 bits
+	 */
+	sum = (sum >> 16) + (sum & 0xffff);	/* add hi 16 to low 16 */
+	sum += (sum >> 16);			/* add carry */
+	answer = ~sum;				/* truncate to 16 bits */
+	return (answer);
 }
 
 void tv_sub(struct timeval *recv, struct timeval *send) {
@@ -38,7 +61,7 @@ void tv_sub(struct timeval *recv, struct timeval *send) {
 }
 
 void sendicmp() {
-	char sendbuf[32];
+	u_char sendbuf[32];
 	int len = 32;
 	struct icmp *icmp_packet = (struct icmp *) sendbuf;
 	icmp_packet -> icmp_type = ICMP_ECHO;
@@ -47,10 +70,10 @@ void sendicmp() {
 	icmp_packet -> icmp_seq = ++nsent;
 	gettimeofday((struct timeval *) icmp_packet -> icmp_data, NULL);
 	icmp_packet -> icmp_cksum = 0;
-	icmp_packet -> icmp_cksum  = checksum_calc(sendbuf, len);
+	icmp_packet -> icmp_cksum  = in_cksum((u_short *)icmp_packet, len);
 
-	sendto(sockfd, sendbuf, len, 0, (struct sockaddr *) &sasend, sizeof(sasend));
-	printf("Sent\n");
+	int n = sendto(sockfd, sendbuf, len, 0, (struct sockaddr *) &sasend, sizeof(sasend));
+	// printf("Sent seq : %d, send %d\n", nsent, n);
 }
 
 static void alarm_handler(int signo) {
@@ -125,6 +148,7 @@ int main(int argc, char **argv) {
 		printf("More arguments required\n");
 		return -1;
 	}
+
 	char *host = argv[1];
 	pid = getpid();
 
