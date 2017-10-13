@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <sstream>
 #include <fstream>
@@ -14,14 +15,14 @@
 
 using namespace std;
 
-int sock;
-struct sockaddr_in client;
 int PORT = 80;
+int sockfd;
+struct sockaddr_in client;
 
 // https://wh1k8zidop.inscname.net/u/07/01/dcb81f790bbf35841f624978de86d03e.jpg
 int main(int argc, char const *argv[])
 {
-    struct hostent * host = gethostbyname("localhost");
+    struct hostent *host = gethostbyname("localhost");
 
     if ( (host == NULL) || (host->h_addr == NULL) ) {
         cout << "Error retrieving DNS information." << endl;
@@ -30,18 +31,18 @@ int main(int argc, char const *argv[])
 
     bzero(&client, sizeof(client));
     client.sin_family = AF_INET;
-    client.sin_port = htons( PORT );
+    client.sin_port = htons(PORT);
     memcpy(&client.sin_addr, host->h_addr, host->h_length);
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (sock < 0) {
+    if (sockfd < 0) {
         cout << "Error creating socket." << endl;
         exit(1);
     }
 
-    if ( connect(sock, (struct sockaddr *)&client, sizeof(client)) < 0 ) {
-        close(sock);
+    if (connect(sockfd, (struct sockaddr *)&client, sizeof(client)) < 0) {
+        close(sockfd);
         cout << "Could not connect" << endl;
         exit(1);
     }
@@ -55,25 +56,39 @@ int main(int argc, char const *argv[])
        << "\r\n\r\n";
     string request = ss.str();
 
-    if (send(sock, request.c_str(), request.length(), 0) != (int)request.length()) {
+    if (write(sockfd, request.c_str(), request.length()) != (int)request.length()) {
         cout << "Error sending request." << endl;
         exit(1);
     }
 
-    cout << "Recieving..." << endl;
-
-    char arr[4];
-
-    deque<char> dq;
+    cout << "Recieving" << endl;
 
     char cur;
-    freopen ("out.out","wb",stdout);
-    while ( read(sock, &cur, 1) > 0 ) {
-        cout << cur;
-        dq.push_back(cur);
-        if()
+    char prev[4];
+    bzero(&prev, sizeof(prev));
+    ofstream out, outfile;
+    out.open("out", ios::binary);
+    outfile.open("out.html");
+    bool flag = false;
+    while (read(sockfd, &cur, 1) > 0) {
+        outfile << cur;
+        if (flag)
+            out << cur;
+        prev[0] = prev[1];
+        prev[1] = prev[2];
+        prev[2] = prev[3];
+        prev[3] = cur;
+        if(prev[0] == '\r' && prev[1] == '\n' && prev[2] == '\r' && prev[3] == '\n') flag = true;
     }
-    fclose(stdout);
+    out.close();
+    outfile.close();
 
+    cout << "Now opening" << endl;
+
+    if(fork() == 0) {
+        system("xdg-open out");
+        exit(0);
+    }
+    else wait(NULL);
     return 0;
 }
